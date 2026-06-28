@@ -1,0 +1,25 @@
+@host = http://localhost:5094
+
+GET {{host}}/api/health
+Accept: application/json
+
+###
+
+GET {{host}}/api/dashboard
+Accept: application/json
+
+###
+
+GET {{host}}/api/products
+Accept: application/json
+
+###
+
+POST {{host}}/api/countries
+Content-Type: application/json
+
+{
+  "code": 21,
+  "name": "Japan",
+  "continentName": "Asia"
+}

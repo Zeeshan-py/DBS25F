@@ -1,0 +1,194 @@
+import type { EntityConfig } from '../types/api'
+
+const money = new Intl.NumberFormat('en-US', {
+  style: 'currency',
+  currency: 'USD',
+  maximumFractionDigits: 0,
+})
+
+const orderStatuses = ['Pending', 'Processing', 'Shipped', 'Completed', 'Cancelled'].map(
+  (status) => ({ value: status, label: status }),
+)
+const productStatuses = ['Active', 'Inactive', 'Out of Stock'].map((status) => ({
+  value: status,
+  label: status,
+}))
+const genders = ['Male', 'Female', 'Other', 'Prefer not to say'].map((gender) => ({
+  value: gender,
+  label: gender,
+}))
+
+export const entityConfigs: EntityConfig[] = [
+  {
+    path: 'countries',
+    endpoint: '/countries',
+    singular: 'Country',
+    plural: 'Countries',
+    description: 'Manage the countries used by customers and merchants.',
+    keyFields: ['code'],
+    columns: [
+      { key: 'code', label: 'Code' },
+      { key: 'name', label: 'Country' },
+      { key: 'continentName', label: 'Continent' },
+    ],
+    fields: [
+      { key: 'code', label: 'Country code', type: 'number', min: 1, required: true },
+      { key: 'name', label: 'Country name', type: 'text', required: true },
+      { key: 'continentName', label: 'Continent', type: 'text', required: true },
+    ],
+    getKeyPath: (row) => String(row.code),
+  },
+  {
+    path: 'users',
+    endpoint: '/users',
+    singular: 'User',
+    plural: 'Users',
+    description: 'Maintain customer and administrator profiles.',
+    keyFields: ['id'],
+    columns: [
+      { key: 'id', label: 'ID' },
+      { key: 'fullName', label: 'Full name' },
+      { key: 'email', label: 'Email' },
+      { key: 'gender', label: 'Gender' },
+      { key: 'dateOfBirth', label: 'Date of birth' },
+      { key: 'countryName', label: 'Country' },
+      { key: 'createdAt', label: 'Created' },
+    ],
+    fields: [
+      { key: 'fullName', label: 'Full name', type: 'text', required: true },
+      { key: 'email', label: 'Email address', type: 'email', required: true },
+      { key: 'gender', label: 'Gender', type: 'select', required: true, options: genders },
+      { key: 'dateOfBirth', label: 'Date of birth', type: 'date', required: true },
+      {
+        key: 'countryCode',
+        label: 'Country',
+        type: 'select',
+        required: true,
+        reference: { endpoint: '/countries', valueKey: 'code', labelKey: 'name' },
+      },
+    ],
+    getKeyPath: (row) => String(row.id),
+  },
+  {
+    path: 'merchants',
+    endpoint: '/merchants',
+    singular: 'Merchant',
+    plural: 'Merchants',
+    description: 'Manage wholesale merchants, administrators, and locations.',
+    keyFields: ['id'],
+    columns: [
+      { key: 'id', label: 'ID' },
+      { key: 'merchantName', label: 'Merchant' },
+      { key: 'adminName', label: 'Administrator' },
+      { key: 'countryName', label: 'Country' },
+      { key: 'createdAt', label: 'Created' },
+    ],
+    fields: [
+      { key: 'merchantName', label: 'Merchant name', type: 'text', required: true },
+      {
+        key: 'adminId',
+        label: 'Administrator',
+        type: 'select',
+        required: true,
+        reference: { endpoint: '/users', valueKey: 'id', labelKey: 'fullName', prefix: '#' },
+      },
+      {
+        key: 'countryCode',
+        label: 'Country',
+        type: 'select',
+        required: true,
+        reference: { endpoint: '/countries', valueKey: 'code', labelKey: 'name' },
+      },
+    ],
+    getKeyPath: (row) => String(row.id),
+  },
+  {
+    path: 'products',
+    endpoint: '/products',
+    singular: 'Product',
+    plural: 'Products',
+    description: 'Maintain merchant catalog items, prices, and availability.',
+    keyFields: ['id'],
+    columns: [
+      { key: 'id', label: 'ID' },
+      { key: 'name', label: 'Product' },
+      { key: 'merchantName', label: 'Merchant' },
+      { key: 'price', label: 'Price', format: (value) => money.format(Number(value)) },
+      { key: 'status', label: 'Status' },
+      { key: 'createdAt', label: 'Created' },
+    ],
+    fields: [
+      {
+        key: 'merchantId',
+        label: 'Merchant',
+        type: 'select',
+        required: true,
+        reference: { endpoint: '/merchants', valueKey: 'id', labelKey: 'merchantName' },
+      },
+      { key: 'name', label: 'Product name', type: 'text', required: true },
+      { key: 'price', label: 'Unit price', type: 'number', min: 1, required: true },
+      { key: 'status', label: 'Status', type: 'select', required: true, options: productStatuses },
+    ],
+    getKeyPath: (row) => String(row.id),
+  },
+  {
+    path: 'orders',
+    endpoint: '/orders',
+    singular: 'Order',
+    plural: 'Orders',
+    description: 'Create orders and track their fulfillment status.',
+    keyFields: ['id'],
+    columns: [
+      { key: 'id', label: 'Order #' },
+      { key: 'userName', label: 'Customer' },
+      { key: 'status', label: 'Status' },
+      { key: 'totalAmount', label: 'Total', format: (value) => money.format(Number(value)) },
+      { key: 'createdAt', label: 'Created' },
+    ],
+    fields: [
+      {
+        key: 'userId',
+        label: 'Customer',
+        type: 'select',
+        required: true,
+        reference: { endpoint: '/users', valueKey: 'id', labelKey: 'fullName', prefix: '#' },
+      },
+      { key: 'status', label: 'Status', type: 'select', required: true, options: orderStatuses },
+    ],
+    getKeyPath: (row) => String(row.id),
+  },
+  {
+    path: 'order-items',
+    endpoint: '/order-items',
+    singular: 'Order item',
+    plural: 'Order Items',
+    description: 'Assign products and bulk quantities to customer orders.',
+    keyFields: ['orderId', 'productId'],
+    columns: [
+      { key: 'orderId', label: 'Order #' },
+      { key: 'customerName', label: 'Customer' },
+      { key: 'productName', label: 'Product' },
+      { key: 'quantity', label: 'Quantity' },
+      { key: 'unitPrice', label: 'Unit price', format: (value) => money.format(Number(value)) },
+      { key: 'lineTotal', label: 'Line total', format: (value) => money.format(Number(value)) },
+    ],
+    fields: [
+      {
+        key: 'orderId',
+        label: 'Order',
+        type: 'select',
+        required: true,
+        reference: { endpoint: '/orders', valueKey: 'id', labelKey: 'userName', prefix: 'Order #' },
+      },
+      {
+        key: 'productId',
+        label: 'Product',
+        type: 'select',
+        required: true,
+        reference: { endpoint: '/products', valueKey: 'id', labelKey: 'name', prefix: '#' },
+      },
+      { key: 'quantity', label: 'Bulk quantity', type: 'number', min: 1, max: 100000, required: true },
+    ],
+    getKeyPath: (row) => `${row.orderId}/${row.productId}`,
+  },
+]
