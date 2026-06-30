@@ -6,7 +6,6 @@ import {
   Menu,
   Package,
   Plus,
-  Search,
   ShoppingBag,
   Users,
   Warehouse,
@@ -27,22 +26,11 @@ const navigation = [
 
 export function AppShell() {
   const [sidebarOpen, setSidebarOpen] = useState(false)
-  const [moduleSearch, setModuleSearch] = useState('')
   const location = useLocation()
   const navigate = useNavigate()
   const current = navigation.find((item) =>
     item.path === '/' ? location.pathname === '/' : location.pathname.startsWith(item.path),
   )
-
-  function jumpToModule(event: React.FormEvent) {
-    event.preventDefault()
-    const term = moduleSearch.trim().toLowerCase()
-    const match = navigation.find((item) => item.label.toLowerCase().includes(term))
-    if (match) {
-      navigate(match.path)
-      setModuleSearch('')
-    }
-  }
 
   return (
     <div className="app-shell">
@@ -108,20 +96,11 @@ export function AppShell() {
             </div>
           </div>
           <div className="topbar-actions">
-            <form className="module-search" onSubmit={jumpToModule}>
-              <Search size={17} aria-hidden="true" />
-              <input
-                list="module-list"
-                value={moduleSearch}
-                onChange={(event) => setModuleSearch(event.target.value)}
-                placeholder="Jump to a module..."
-                aria-label="Jump to a module"
-              />
-              <datalist id="module-list">
-                {navigation.map((item) => <option key={item.path} value={item.label} />)}
-              </datalist>
-            </form>
-            <button className="button primary topbar-create" type="button" onClick={() => navigate('/orders?create=1')}>
+            <button
+              className="button primary topbar-create"
+              type="button"
+              onClick={() => navigate('/orders', { state: { openCreate: Date.now() } })}
+            >
               <Plus size={17} />
               New order
             </button>

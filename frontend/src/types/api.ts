@@ -57,23 +57,11 @@ export interface OrderItem {
   lineTotal: number
 }
 
-export interface StatusCount {
-  status: string
-  count: number
-}
-
-export interface ActivityPoint {
-  date: string
-  orders: number
-}
-
 export interface DashboardSummary {
   totalOrders: number
   totalSales: number
   totalMerchants: number
   activeProducts: number
-  orderStatuses: StatusCount[]
-  orderActivity: ActivityPoint[]
   recentOrders: Order[]
   productStatuses: Product[]
 }

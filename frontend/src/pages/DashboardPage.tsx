@@ -1,15 +1,6 @@
 import { Building2, CircleDollarSign, PackageCheck, ShoppingBag } from 'lucide-react'
 import { useCallback, useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
-import {
-  CartesianGrid,
-  Line,
-  LineChart,
-  ResponsiveContainer,
-  Tooltip,
-  XAxis,
-  YAxis,
-} from 'recharts'
 import { StatusBadge } from '../components/StatusBadge'
 import { apiService, getErrorMessage } from '../services/api'
 import type { DashboardSummary } from '../types/api'
@@ -22,8 +13,7 @@ const money = new Intl.NumberFormat('en-US', {
 
 function formatDate(value: string) {
   const [date] = value.split(' ')
-  return new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
-    .format(new Date(`${date}T00:00:00`))
+  return date
 }
 
 export function DashboardPage() {
@@ -62,7 +52,7 @@ export function DashboardPage() {
     return (
       <section className="error-state">
         <h2>Dashboard unavailable</h2>
-        <p>{error || 'The dashboard data could not be loaded.'}</p>
+        <p>{error || 'Start the API and MySQL database, then try again.'}</p>
         <button className="button primary" type="button" onClick={() => void loadDashboard()}>
           Try again
         </button>
@@ -72,15 +62,13 @@ export function DashboardPage() {
 
   const cards = [
     { label: 'Total orders', value: data.totalOrders.toLocaleString(), icon: ShoppingBag },
-    { label: 'Gross order value', value: money.format(data.totalSales), icon: CircleDollarSign },
+    { label: 'Total sales', value: money.format(data.totalSales), icon: CircleDollarSign },
     { label: 'Merchants', value: data.totalMerchants.toLocaleString(), icon: Building2 },
     { label: 'Active products', value: data.activeProducts.toLocaleString(), icon: PackageCheck },
   ]
 
   return (
     <div className="dashboard-page">
-      {error ? <div className="alert error">{error}</div> : null}
-
       <section className="metric-grid" aria-label="Business totals">
         {cards.map(({ label, value, icon: Icon }) => (
           <article className="metric-card" key={label}>
@@ -93,62 +81,12 @@ export function DashboardPage() {
         ))}
       </section>
 
-      <div className="dashboard-grid">
-        <section className="panel chart-panel">
-          <header className="panel-header">
-            <div>
-              <h2>Order activity</h2>
-              <p>Daily orders across the seeded period</p>
-            </div>
-            <span className="panel-meta">{data.orderActivity.length} active days</span>
-          </header>
-          <div className="chart-wrap" aria-label="Order activity line chart">
-            <ResponsiveContainer width="100%" height="100%">
-              <LineChart data={data.orderActivity} margin={{ top: 16, right: 16, left: -22, bottom: 4 }}>
-                <CartesianGrid stroke="#e7edf2" strokeDasharray="4 4" vertical={false} />
-                <XAxis
-                  dataKey="date"
-                  tickFormatter={(value: string) => value.slice(5)}
-                  tick={{ fill: '#64748b', fontSize: 12 }}
-                  axisLine={false}
-                  tickLine={false}
-                />
-                <YAxis
-                  allowDecimals={false}
-                  tick={{ fill: '#64748b', fontSize: 12 }}
-                  axisLine={false}
-                  tickLine={false}
-                />
-                <Tooltip
-                  labelFormatter={(value) => formatDate(String(value))}
-                  contentStyle={{ borderRadius: 8, border: '1px solid #dbe3ea', boxShadow: '0 8px 24px rgba(15, 23, 42, .08)' }}
-                />
-                <Line
-                  type="monotone"
-                  dataKey="orders"
-                  stroke="#0f9b8e"
-                  strokeWidth={2.5}
-                  dot={{ r: 3, fill: '#fff', stroke: '#0f9b8e', strokeWidth: 2 }}
-                  activeDot={{ r: 5 }}
-                />
-              </LineChart>
-            </ResponsiveContainer>
-          </div>
-          <div className="status-summary" aria-label="Order status summary">
-            {data.orderStatuses.map((item) => (
-              <div key={item.status}>
-                <StatusBadge status={item.status} />
-                <strong>{item.count}</strong>
-              </div>
-            ))}
-          </div>
-        </section>
-
-        <section className="panel recent-panel">
+      <div className="simple-dashboard-grid">
+        <section className="panel">
           <header className="panel-header">
             <div>
               <h2>Recent orders</h2>
-              <p>Latest customer transactions</p>
+              <p>Latest customer orders</p>
             </div>
             <Link to="/orders">View all</Link>
           </header>
@@ -158,6 +96,7 @@ export function DashboardPage() {
                 <tr>
                   <th>Order</th>
                   <th>Customer</th>
+                  <th>Date</th>
                   <th>Total</th>
                   <th>Status</th>
                 </tr>
@@ -165,11 +104,9 @@ export function DashboardPage() {
               <tbody>
                 {data.recentOrders.map((order) => (
                   <tr key={order.id}>
-                    <td>
-                      <strong className="order-number">#{String(order.id).padStart(4, '0')}</strong>
-                      <span className="cell-subtext">{formatDate(order.createdAt)}</span>
-                    </td>
+                    <td><strong className="order-number">#{order.id}</strong></td>
                     <td>{order.userName}</td>
+                    <td>{formatDate(order.createdAt)}</td>
                     <td>{money.format(order.totalAmount)}</td>
                     <td><StatusBadge status={order.status} /></td>
                   </tr>
@@ -178,39 +115,39 @@ export function DashboardPage() {
             </table>
           </div>
         </section>
-      </div>
 
-      <section className="panel product-panel">
-        <header className="panel-header">
-          <div>
-            <h2>Product status</h2>
-            <p>Catalog items requiring attention appear first</p>
-          </div>
-          <Link to="/products">View all</Link>
-        </header>
-        <div className="table-scroll">
-          <table>
-            <thead>
-              <tr>
-                <th>Product</th>
-                <th>Merchant</th>
-                <th>Unit price</th>
-                <th>Status</th>
-              </tr>
-            </thead>
-            <tbody>
-              {data.productStatuses.map((product) => (
-                <tr key={product.id}>
-                  <td><strong>{product.name}</strong></td>
-                  <td>{product.merchantName}</td>
-                  <td>{money.format(product.price)}</td>
-                  <td><StatusBadge status={product.status} /></td>
+        <section className="panel">
+          <header className="panel-header">
+            <div>
+              <h2>Products</h2>
+              <p>Product status overview</p>
+            </div>
+            <Link to="/products">View all</Link>
+          </header>
+          <div className="table-scroll">
+            <table>
+              <thead>
+                <tr>
+                  <th>Product</th>
+                  <th>Merchant</th>
+                  <th>Price</th>
+                  <th>Status</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </section>
+              </thead>
+              <tbody>
+                {data.productStatuses.map((product) => (
+                  <tr key={product.id}>
+                    <td><strong>{product.name}</strong></td>
+                    <td>{product.merchantName}</td>
+                    <td>{money.format(product.price)}</td>
+                    <td><StatusBadge status={product.status} /></td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </section>
+      </div>
     </div>
   )
 }

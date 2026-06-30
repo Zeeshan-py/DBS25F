@@ -20,12 +20,6 @@ public sealed class DashboardController(WholesaleDealerDbContext db) : Controlle
             .Where(x => x.Order.Status != "Cancelled")
             .SumAsync(x => (long)x.Quantity * x.Product.Price, cancellationToken);
 
-        var statuses = await db.Orders.AsNoTracking()
-            .GroupBy(x => x.Status)
-            .Select(group => new StatusCountResponse(group.Key, group.Count()))
-            .OrderBy(x => x.Status)
-            .ToListAsync(cancellationToken);
-
         var recentOrders = await db.Orders.AsNoTracking()
             .OrderByDescending(x => x.CreatedAt)
             .Take(5)
@@ -43,24 +37,11 @@ public sealed class DashboardController(WholesaleDealerDbContext db) : Controlle
                 x.Name, x.Price, x.Status, x.CreatedAt))
             .ToListAsync(cancellationToken);
 
-        var activityDates = await db.Orders.AsNoTracking()
-            .OrderBy(x => x.CreatedAt)
-            .Select(x => x.CreatedAt)
-            .ToListAsync(cancellationToken);
-
-        var activity = activityDates
-            .GroupBy(x => x[..10])
-            .Select(group => new ActivityPointResponse(group.Key, group.Count()))
-            .OrderBy(x => x.Date)
-            .ToList();
-
         return Ok(new DashboardSummaryResponse(
             totalOrders,
             totalSales,
             totalMerchants,
             activeProducts,
-            statuses,
-            activity,
             recentOrders,
             productStatuses));
     }

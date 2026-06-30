@@ -1,6 +1,6 @@
 import { ChevronLeft, ChevronRight, Pencil, Plus, Search, Trash2 } from 'lucide-react'
 import { useCallback, useDeferredValue, useEffect, useMemo, useState } from 'react'
-import { useSearchParams } from 'react-router-dom'
+import { useLocation, useNavigate } from 'react-router-dom'
 import { Modal } from '../components/Modal'
 import { StatusBadge } from '../components/StatusBadge'
 import { apiService, getErrorMessage } from '../services/api'
@@ -36,7 +36,8 @@ export function EntityPage({ config }: EntityPageProps) {
   const [formErrors, setFormErrors] = useState<Record<string, string>>({})
   const [submitting, setSubmitting] = useState(false)
   const [referenceOptions, setReferenceOptions] = useState<Record<string, SelectOption[]>>({})
-  const [searchParams, setSearchParams] = useSearchParams()
+  const location = useLocation()
+  const navigate = useNavigate()
 
   const loadRows = useCallback(async () => {
     setLoading(true)
@@ -100,11 +101,12 @@ export function EntityPage({ config }: EntityPageProps) {
   }, [config.fields])
 
   useEffect(() => {
-    if (searchParams.get('create') === '1') {
+    const routeState = location.state as { openCreate?: number } | null
+    if (config.path === 'orders' && routeState?.openCreate) {
       openCreate()
-      setSearchParams({}, { replace: true })
+      navigate(location.pathname, { replace: true, state: null })
     }
-  }, [openCreate, searchParams, setSearchParams])
+  }, [config.path, location.pathname, location.state, navigate, openCreate])
 
   const filteredRows = useMemo(() => {
     const term = deferredSearch.trim().toLowerCase()
