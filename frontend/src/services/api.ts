@@ -9,20 +9,47 @@ const api = axios.create({
   },
 })
 
+function toCamelCase(key: string) {
+  const withoutUnderscores = key.replace(/_([a-z])/g, (_, letter: string) => letter.toUpperCase())
+  return withoutUnderscores.charAt(0).toLowerCase() + withoutUnderscores.slice(1)
+}
+
+function normalizeKeys(value: unknown): unknown {
+  if (Array.isArray(value)) {
+    return value.map(normalizeKeys)
+  }
+  if (value !== null && typeof value === 'object') {
+    return Object.fromEntries(
+      Object.entries(value).map(([key, item]) => [toCamelCase(key), normalizeKeys(item)]),
+    )
+  }
+  return value
+}
+
+function normalizeList<T>(value: unknown): T[] {
+  const normalized = normalizeKeys(value)
+  if (Array.isArray(normalized)) return normalized as T[]
+
+  const wrapped = normalized as { $values?: unknown } | null
+  if (wrapped && Array.isArray(wrapped.$values)) return wrapped.$values as T[]
+
+  throw new Error('The API returned an invalid list response.')
+}
+
 export const apiService = {
   getAll: async <T = ApiRecord>(endpoint: string): Promise<T[]> => {
-    const response = await api.get<T[]>(endpoint)
-    return response.data
+    const response = await api.get<unknown>(endpoint)
+    return normalizeList<T>(response.data)
   },
 
   getDashboard: async (): Promise<DashboardSummary> => {
-    const response = await api.get<DashboardSummary>('/dashboard')
-    return response.data
+    const response = await api.get<unknown>('/dashboard')
+    return normalizeKeys(response.data) as DashboardSummary
   },
 
   create: async <T = ApiRecord>(endpoint: string, payload: ApiRecord): Promise<T> => {
-    const response = await api.post<T>(endpoint, payload)
-    return response.data
+    const response = await api.post<unknown>(endpoint, payload)
+    return normalizeKeys(response.data) as T
   },
 
   update: async <T = ApiRecord>(
@@ -30,8 +57,8 @@ export const apiService = {
     keyPath: string,
     payload: ApiRecord,
   ): Promise<T> => {
-    const response = await api.put<T>(`${endpoint}/${keyPath}`, payload)
-    return response.data
+    const response = await api.put<unknown>(`${endpoint}/${keyPath}`, payload)
+    return normalizeKeys(response.data) as T
   },
 
   remove: async (endpoint: string, keyPath: string): Promise<void> => {

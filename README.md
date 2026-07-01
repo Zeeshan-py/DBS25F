@@ -9,7 +9,7 @@ A complete Database Systems semester project based on the supplied ERD. It manag
 - Entity Framework Core 8 with Pomelo
 - Swagger / OpenAPI
 - React 19 + TypeScript + Vite
-- Axios, React Router, Lucide icons, and Recharts
+- Axios, React Router, and Lucide icons
 
 ## ERD implementation
 
@@ -95,7 +95,6 @@ Final Project/
 │   ├── tsconfig.node.json
 │   └── vite.config.ts
 ├── docs/
-│   ├── dashboard-design.png
 │   └── erd.png
 ├── .gitignore
 ├── docker-compose.yml
@@ -164,7 +163,7 @@ mysql -u root -p wholesale_dealer < .\database\04_verify.sql
 The checked-in development connection uses the Docker credentials:
 
 ```text
-Server=localhost;Port=3306;Database=wholesale_dealer;User=wholesale_app;Password=wholesale_dev
+Server=localhost;Port=3307;Database=wholesale_dealer;User=wholesale_app;Password=wholesale_dev
 ```
 
 For another MySQL account, avoid editing source-controlled settings and override the connection for the current PowerShell session:

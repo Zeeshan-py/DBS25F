@@ -22,6 +22,20 @@ function isEmpty(value: Primitive | undefined) {
   return value === undefined || value === ''
 }
 
+function readValue(row: ApiRecord, key: string): Primitive | undefined {
+  if (row[key] !== undefined && row[key] !== null) return row[key]
+
+  const normalizedKey = key.replaceAll('_', '').toLowerCase()
+  const matchingKey = Object.keys(row).find(
+    (candidate) => candidate.replaceAll('_', '').toLowerCase() === normalizedKey,
+  )
+  return matchingKey ? row[matchingKey] : undefined
+}
+
+function displayValue(value: Primitive | undefined) {
+  return value === undefined || value === null || value === '' ? '—' : String(value)
+}
+
 export function EntityPage({ config }: EntityPageProps) {
   const [rows, setRows] = useState<ApiRecord[]>([])
   const [loading, setLoading] = useState(true)
@@ -36,6 +50,7 @@ export function EntityPage({ config }: EntityPageProps) {
   const [formErrors, setFormErrors] = useState<Record<string, string>>({})
   const [submitting, setSubmitting] = useState(false)
   const [referenceOptions, setReferenceOptions] = useState<Record<string, SelectOption[]>>({})
+  const [referenceLoading, setReferenceLoading] = useState(false)
   const location = useLocation()
   const navigate = useNavigate()
 
@@ -64,6 +79,7 @@ export function EntityPage({ config }: EntityPageProps) {
     const referenceFields = config.fields.filter((field) => field.reference)
 
     async function loadReferences() {
+      setReferenceLoading(referenceFields.length > 0)
       try {
         const entries = await Promise.all(
           referenceFields.map(async (field) => {
@@ -81,6 +97,8 @@ export function EntityPage({ config }: EntityPageProps) {
         if (active) setReferenceOptions(Object.fromEntries(entries))
       } catch (error) {
         if (active) setLoadError(getErrorMessage(error))
+      } finally {
+        if (active) setReferenceLoading(false)
       }
     }
 
@@ -129,7 +147,7 @@ export function EntityPage({ config }: EntityPageProps) {
 
   function openEdit(row: ApiRecord) {
     setEditingRow(row)
-    setFormValues(Object.fromEntries(config.fields.map((field) => [field.key, row[field.key] ?? ''])))
+    setFormValues(Object.fromEntries(config.fields.map((field) => [field.key, readValue(row, field.key) ?? ''])))
     setFormErrors({})
     setModalMode('edit')
   }
@@ -208,7 +226,7 @@ export function EntityPage({ config }: EntityPageProps) {
   async function deleteRow(row: ApiRecord) {
     const label = config.columns
       .slice(0, 2)
-      .map((column) => row[column.key])
+      .map((column) => readValue(row, column.key))
       .filter(Boolean)
       .join(' · ')
     if (!window.confirm(`Delete ${config.singular.toLowerCase()} ${label}? This action cannot be undone.`)) {
@@ -284,17 +302,19 @@ export function EntityPage({ config }: EntityPageProps) {
                   </td>
                 </tr>
               ) : (
-                visibleRows.map((row) => (
-                  <tr key={config.getKeyPath(row)}>
+                visibleRows.map((row, rowIndex) => (
+                  <tr key={`${config.path}-${config.getKeyPath(row)}-${rowIndex}`}>
                     {config.columns.map((column) => {
-                      const value = row[column.key]
+                      const value = readValue(row, column.key)
                       return (
                         <td key={column.key}>
                           {column.key === 'status'
-                            ? <StatusBadge status={String(value)} />
-                            : column.format
+                            ? value === undefined
+                              ? '—'
+                              : <StatusBadge status={String(value)} />
+                            : column.format && value !== undefined
                               ? column.format(value, row)
-                              : String(value)}
+                              : displayValue(value)}
                         </td>
                       )
                     })}
@@ -346,13 +366,24 @@ export function EntityPage({ config }: EntityPageProps) {
                     {field.type === 'select' ? (
                       <select
                         value={formValues[field.key] ?? ''}
-                        disabled={disabled}
+                        disabled={disabled || Boolean(field.reference && referenceLoading)}
                         onChange={(event) => setFormValues((current) => ({ ...current, [field.key]: event.target.value }))}
                         aria-invalid={Boolean(formErrors[field.key])}
                       >
-                        <option value="">Select {field.label.toLowerCase()}</option>
-                        {fieldOptions.map((option) => (
-                          <option key={String(option.value)} value={option.value}>{option.label}</option>
+                        <option value="">
+                          {field.reference && referenceLoading
+                            ? 'Loading options...'
+                            : field.reference && fieldOptions.length === 0
+                              ? 'No options available'
+                              : `Select ${field.label.toLowerCase()}`}
+                        </option>
+                        {fieldOptions.map((option, optionIndex) => (
+                          <option
+                            key={`${field.key}-${String(option.value)}-${optionIndex}`}
+                            value={option.value}
+                          >
+                            {option.label}
+                          </option>
                         ))}
                       </select>
                     ) : (
