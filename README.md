@@ -104,7 +104,7 @@ Final Project/
 
 Generated folders such as `node_modules`, `dist`, `bin`, and `obj` are intentionally excluded from the structure.
 
-## Quick start with Docker
+## Quick start with Docker Desktop
 
 Prerequisites: Docker Desktop, .NET 8 SDK, and Node.js 20 or newer.
 
