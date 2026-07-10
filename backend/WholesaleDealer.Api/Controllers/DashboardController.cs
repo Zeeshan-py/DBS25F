@@ -49,42 +49,48 @@ public sealed class DashboardController(WholesaleDealerDbContext db) : Controlle
             .ToListAsync(cancellationToken);
 
         var topCustomers = await db.Users.AsNoTracking()
-            .Select(x => new TopCustomerResponse(
-                x.Id,
+            .Select(x => new
+            {
+                UserId = x.Id,
                 x.FullName,
-                x.Orders.Count,
-                x.Orders
+                OrderCount = x.Orders.Count,
+                TotalSpent = x.Orders
                     .Where(order => order.Status != "Cancelled")
                     .SelectMany(order => order.OrderItems)
-                    .Sum(item => (long?)item.Quantity * item.Product.Price) ?? 0))
+                    .Sum(item => (long?)item.Quantity * item.Product.Price) ?? 0
+            })
             .OrderByDescending(x => x.TotalSpent)
             .ThenBy(x => x.FullName)
             .Take(5)
             .ToListAsync(cancellationToken);
 
         var salesByCountry = await db.Countries.AsNoTracking()
-            .Select(x => new SalesByCountryResponse(
-                x.Name,
-                x.Users.SelectMany(user => user.Orders).Count(),
-                x.Users
+            .Select(x => new
+            {
+                CountryName = x.Name,
+                OrderCount = x.Users.SelectMany(user => user.Orders).Count(),
+                TotalSales = x.Users
                     .SelectMany(user => user.Orders)
                     .Where(order => order.Status != "Cancelled")
                     .SelectMany(order => order.OrderItems)
-                    .Sum(item => (long?)item.Quantity * item.Product.Price) ?? 0))
+                    .Sum(item => (long?)item.Quantity * item.Product.Price) ?? 0
+            })
             .OrderByDescending(x => x.TotalSales)
             .ThenBy(x => x.CountryName)
             .Take(5)
             .ToListAsync(cancellationToken);
 
         var merchantSales = await db.Merchants.AsNoTracking()
-            .Select(x => new MerchantSalesResponse(
-                x.Id,
+            .Select(x => new
+            {
+                MerchantId = x.Id,
                 x.MerchantName,
-                x.Products.Count,
-                x.Products
+                ProductCount = x.Products.Count,
+                TotalSales = x.Products
                     .SelectMany(product => product.OrderItems)
                     .Where(item => item.Order.Status != "Cancelled")
-                    .Sum(item => (long?)item.Quantity * item.Product.Price) ?? 0))
+                    .Sum(item => (long?)item.Quantity * item.Product.Price) ?? 0
+            })
             .OrderByDescending(x => x.TotalSales)
             .ThenBy(x => x.MerchantName)
             .Take(5)
@@ -103,8 +109,14 @@ public sealed class DashboardController(WholesaleDealerDbContext db) : Controlle
             recentOrders,
             productStatuses,
             productStatusCounts,
-            topCustomers,
-            salesByCountry,
-            merchantSales));
+            topCustomers
+                .Select(x => new TopCustomerResponse(x.UserId, x.FullName, x.OrderCount, x.TotalSpent))
+                .ToList(),
+            salesByCountry
+                .Select(x => new SalesByCountryResponse(x.CountryName, x.OrderCount, x.TotalSales))
+                .ToList(),
+            merchantSales
+                .Select(x => new MerchantSalesResponse(x.MerchantId, x.MerchantName, x.ProductCount, x.TotalSales))
+                .ToList()));
     }
 }

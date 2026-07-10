@@ -29,19 +29,25 @@ public sealed class ReportsController(WholesaleDealerDbContext db) : ControllerB
     {
         limit = Math.Clamp(limit, 1, 50);
 
-        var report = await db.Users.AsNoTracking()
-            .Select(x => new TopCustomerResponse(
-                x.Id,
+        var rows = await db.Users.AsNoTracking()
+            .Select(x => new
+            {
+                UserId = x.Id,
                 x.FullName,
-                x.Orders.Count,
-                x.Orders
+                OrderCount = x.Orders.Count,
+                TotalSpent = x.Orders
                     .Where(order => order.Status != "Cancelled")
                     .SelectMany(order => order.OrderItems)
-                    .Sum(item => (long?)item.Quantity * item.Product.Price) ?? 0))
+                    .Sum(item => (long?)item.Quantity * item.Product.Price) ?? 0
+            })
             .OrderByDescending(x => x.TotalSpent)
             .ThenBy(x => x.FullName)
             .Take(limit)
             .ToListAsync(cancellationToken);
+
+        var report = rows
+            .Select(x => new TopCustomerResponse(x.UserId, x.FullName, x.OrderCount, x.TotalSpent))
+            .ToList();
 
         return Ok(report);
     }
@@ -53,19 +59,25 @@ public sealed class ReportsController(WholesaleDealerDbContext db) : ControllerB
     {
         limit = Math.Clamp(limit, 1, 50);
 
-        var report = await db.Countries.AsNoTracking()
-            .Select(x => new SalesByCountryResponse(
-                x.Name,
-                x.Users.SelectMany(user => user.Orders).Count(),
-                x.Users
+        var rows = await db.Countries.AsNoTracking()
+            .Select(x => new
+            {
+                CountryName = x.Name,
+                OrderCount = x.Users.SelectMany(user => user.Orders).Count(),
+                TotalSales = x.Users
                     .SelectMany(user => user.Orders)
                     .Where(order => order.Status != "Cancelled")
                     .SelectMany(order => order.OrderItems)
-                    .Sum(item => (long?)item.Quantity * item.Product.Price) ?? 0))
+                    .Sum(item => (long?)item.Quantity * item.Product.Price) ?? 0
+            })
             .OrderByDescending(x => x.TotalSales)
             .ThenBy(x => x.CountryName)
             .Take(limit)
             .ToListAsync(cancellationToken);
+
+        var report = rows
+            .Select(x => new SalesByCountryResponse(x.CountryName, x.OrderCount, x.TotalSales))
+            .ToList();
 
         return Ok(report);
     }
@@ -77,19 +89,25 @@ public sealed class ReportsController(WholesaleDealerDbContext db) : ControllerB
     {
         limit = Math.Clamp(limit, 1, 50);
 
-        var report = await db.Merchants.AsNoTracking()
-            .Select(x => new MerchantSalesResponse(
-                x.Id,
+        var rows = await db.Merchants.AsNoTracking()
+            .Select(x => new
+            {
+                MerchantId = x.Id,
                 x.MerchantName,
-                x.Products.Count,
-                x.Products
+                ProductCount = x.Products.Count,
+                TotalSales = x.Products
                     .SelectMany(product => product.OrderItems)
                     .Where(item => item.Order.Status != "Cancelled")
-                    .Sum(item => (long?)item.Quantity * item.Product.Price) ?? 0))
+                    .Sum(item => (long?)item.Quantity * item.Product.Price) ?? 0
+            })
             .OrderByDescending(x => x.TotalSales)
             .ThenBy(x => x.MerchantName)
             .Take(limit)
             .ToListAsync(cancellationToken);
+
+        var report = rows
+            .Select(x => new MerchantSalesResponse(x.MerchantId, x.MerchantName, x.ProductCount, x.TotalSales))
+            .ToList();
 
         return Ok(report);
     }
