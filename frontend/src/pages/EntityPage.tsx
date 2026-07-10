@@ -1,4 +1,15 @@
-import { ChevronLeft, ChevronRight, Pencil, Plus, Search, Trash2 } from 'lucide-react'
+import {
+  ArrowUpDown,
+  ChevronLeft,
+  ChevronRight,
+  Download,
+  Filter,
+  Pencil,
+  Plus,
+  RefreshCcw,
+  Search,
+  Trash2,
+} from 'lucide-react'
 import { useCallback, useDeferredValue, useEffect, useMemo, useState } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { Modal } from '../components/Modal'
@@ -16,7 +27,14 @@ interface EntityPageProps {
   config: EntityConfig
 }
 
-const pageSize = 10
+const pageSizeOptions = [10, 20, 50]
+
+type SortDirection = 'asc' | 'desc'
+
+interface SortState {
+  key: string
+  direction: SortDirection
+}
 
 function isEmpty(value: Primitive | undefined) {
   return value === undefined || value === ''
@@ -33,7 +51,27 @@ function readValue(row: ApiRecord, key: string): Primitive | undefined {
 }
 
 function displayValue(value: Primitive | undefined) {
-  return value === undefined || value === null || value === '' ? '—' : String(value)
+  return value === undefined || value === null || value === '' ? '-' : String(value)
+}
+
+function compareValues(a: Primitive | undefined, b: Primitive | undefined, direction: SortDirection) {
+  const modifier = direction === 'asc' ? 1 : -1
+  if (a === undefined && b === undefined) return 0
+  if (a === undefined) return 1
+  if (b === undefined) return -1
+
+  const aNumber = Number(a)
+  const bNumber = Number(b)
+  if (Number.isFinite(aNumber) && Number.isFinite(bNumber)) {
+    return (aNumber - bNumber) * modifier
+  }
+
+  return String(a).localeCompare(String(b), undefined, { numeric: true, sensitivity: 'base' }) * modifier
+}
+
+function csvEscape(value: Primitive | undefined) {
+  const text = displayValue(value)
+  return /[",\n]/.test(text) ? `"${text.replaceAll('"', '""')}"` : text
 }
 
 export function EntityPage({ config }: EntityPageProps) {
@@ -44,6 +82,9 @@ export function EntityPage({ config }: EntityPageProps) {
   const [search, setSearch] = useState('')
   const deferredSearch = useDeferredValue(search)
   const [page, setPage] = useState(1)
+  const [pageSize, setPageSize] = useState(pageSizeOptions[0])
+  const [statusFilter, setStatusFilter] = useState('')
+  const [sortState, setSortState] = useState<SortState | null>(null)
   const [modalMode, setModalMode] = useState<'create' | 'edit' | null>(null)
   const [editingRow, setEditingRow] = useState<ApiRecord | null>(null)
   const [formValues, setFormValues] = useState<ApiRecord>({})
@@ -70,6 +111,8 @@ export function EntityPage({ config }: EntityPageProps) {
     setRows([])
     setSearch('')
     setPage(1)
+    setStatusFilter('')
+    setSortState(null)
     setNotice('')
     void loadRows()
   }, [loadRows])
@@ -88,7 +131,7 @@ export function EntityPage({ config }: EntityPageProps) {
             const options = records.map((record) => ({
               value: record[source.valueKey],
               label: source.prefix
-                ? `${source.prefix}${record[source.valueKey]} — ${record[source.labelKey]}`
+                ? `${source.prefix}${record[source.valueKey]} - ${record[source.labelKey]}`
                 : String(record[source.labelKey]),
             }))
             return [field.key, options] as const
@@ -126,20 +169,34 @@ export function EntityPage({ config }: EntityPageProps) {
     }
   }, [config.path, location.pathname, location.state, navigate, openCreate])
 
+  const statusOptions = useMemo(
+    () => config.fields.find((field) => field.key === 'status')?.options ?? [],
+    [config.fields],
+  )
+
   const filteredRows = useMemo(() => {
     const term = deferredSearch.trim().toLowerCase()
-    if (!term) return rows
-    return rows.filter((row) =>
-      Object.values(row).some((value) => String(value).toLowerCase().includes(term)),
-    )
-  }, [deferredSearch, rows])
+    return rows.filter((row) => {
+      const matchesSearch = !term ||
+        Object.values(row).some((value) => String(value).toLowerCase().includes(term))
+      const matchesStatus = !statusFilter || readValue(row, 'status') === statusFilter
+      return matchesSearch && matchesStatus
+    })
+  }, [deferredSearch, rows, statusFilter])
 
-  const pageCount = Math.max(1, Math.ceil(filteredRows.length / pageSize))
-  const visibleRows = filteredRows.slice((page - 1) * pageSize, page * pageSize)
+  const sortedRows = useMemo(() => {
+    if (!sortState) return filteredRows
+    return [...filteredRows].sort((a, b) =>
+      compareValues(readValue(a, sortState.key), readValue(b, sortState.key), sortState.direction),
+    )
+  }, [filteredRows, sortState])
+
+  const pageCount = Math.max(1, Math.ceil(sortedRows.length / pageSize))
+  const visibleRows = sortedRows.slice((page - 1) * pageSize, page * pageSize)
 
   useEffect(() => {
     setPage(1)
-  }, [deferredSearch])
+  }, [deferredSearch, pageSize, statusFilter])
 
   useEffect(() => {
     if (page > pageCount) setPage(pageCount)
@@ -161,6 +218,29 @@ export function EntityPage({ config }: EntityPageProps) {
 
   function optionsFor(field: FormField): SelectOption[] {
     return field.options ?? referenceOptions[field.key] ?? []
+  }
+
+  function toggleSort(key: string) {
+    setSortState((current) => {
+      if (!current || current.key !== key) return { key, direction: 'asc' }
+      if (current.direction === 'asc') return { key, direction: 'desc' }
+      return null
+    })
+  }
+
+  function exportCsv() {
+    const header = config.columns.map((column) => csvEscape(column.label)).join(',')
+    const body = sortedRows.map((row) =>
+      config.columns.map((column) => csvEscape(readValue(row, column.key))).join(','),
+    )
+    const csv = [header, ...body].join('\n')
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' })
+    const url = URL.createObjectURL(blob)
+    const link = document.createElement('a')
+    link.href = url
+    link.download = `${config.path}-${new Date().toISOString().slice(0, 10)}.csv`
+    link.click()
+    URL.revokeObjectURL(url)
   }
 
   function validateForm() {
@@ -228,7 +308,7 @@ export function EntityPage({ config }: EntityPageProps) {
       .slice(0, 2)
       .map((column) => readValue(row, column.key))
       .filter(Boolean)
-      .join(' · ')
+      .join(' - ')
     if (!window.confirm(`Delete ${config.singular.toLowerCase()} ${label}? This action cannot be undone.`)) {
       return
     }
@@ -266,23 +346,58 @@ export function EntityPage({ config }: EntityPageProps) {
 
       <div className="data-panel">
         <div className="table-toolbar">
-          <label className="search-field">
-            <Search size={17} />
-            <input
-              type="search"
-              value={search}
-              onChange={(event) => setSearch(event.target.value)}
-              placeholder={`Search ${config.plural.toLowerCase()}...`}
-            />
-          </label>
-          <span>{filteredRows.length} {filteredRows.length === 1 ? 'record' : 'records'}</span>
+          <div className="toolbar-left">
+            <label className="search-field">
+              <Search size={17} />
+              <input
+                type="search"
+                value={search}
+                onChange={(event) => setSearch(event.target.value)}
+                placeholder={`Search ${config.plural.toLowerCase()}...`}
+              />
+            </label>
+            {statusOptions.length > 0 ? (
+              <label className="compact-select">
+                <Filter size={15} />
+                <select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)}>
+                  <option value="">All statuses</option>
+                  {statusOptions.map((option) => (
+                    <option key={String(option.value)} value={option.value}>
+                      {option.label}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            ) : null}
+          </div>
+          <div className="toolbar-actions">
+            <span>{sortedRows.length} {sortedRows.length === 1 ? 'record' : 'records'}</span>
+            <button className="button secondary compact-button" type="button" onClick={() => void loadRows()}>
+              <RefreshCcw size={15} />
+              Refresh
+            </button>
+            <button className="button secondary compact-button" type="button" onClick={exportCsv} disabled={sortedRows.length === 0}>
+              <Download size={15} />
+              Export CSV
+            </button>
+          </div>
         </div>
 
         <div className="table-scroll">
           <table className="entity-table">
             <thead>
               <tr>
-                {config.columns.map((column) => <th key={column.key}>{column.label}</th>)}
+                {config.columns.map((column) => (
+                  <th key={column.key}>
+                    <button className="sort-button" type="button" onClick={() => toggleSort(column.key)}>
+                      <span>{column.label}</span>
+                      <ArrowUpDown size={13} />
+                      {sortState?.key === column.key ? (
+                        <span className="sort-direction">{sortState.direction === 'asc' ? 'A-Z' : 'Z-A'}</span>
+                      ) : null}
+                    </button>
+                  </th>
+                ))}
                 <th className="actions-column">Actions</th>
               </tr>
             </thead>
@@ -310,7 +425,7 @@ export function EntityPage({ config }: EntityPageProps) {
                         <td key={column.key}>
                           {column.key === 'status'
                             ? value === undefined
-                              ? '—'
+                              ? '-'
                               : <StatusBadge status={String(value)} />
                             : column.format && value !== undefined
                               ? column.format(value, row)
@@ -337,10 +452,18 @@ export function EntityPage({ config }: EntityPageProps) {
 
         <footer className="table-footer">
           <span>
-            Showing {filteredRows.length === 0 ? 0 : (page - 1) * pageSize + 1}–
-            {Math.min(page * pageSize, filteredRows.length)} of {filteredRows.length}
+            Showing {sortedRows.length === 0 ? 0 : (page - 1) * pageSize + 1}-
+            {Math.min(page * pageSize, sortedRows.length)} of {sortedRows.length}
           </span>
           <div className="pagination">
+            <label className="page-size">
+              Rows
+              <select value={pageSize} onChange={(event) => setPageSize(Number(event.target.value))}>
+                {pageSizeOptions.map((size) => (
+                  <option key={size} value={size}>{size}</option>
+                ))}
+              </select>
+            </label>
             <button className="icon-button" type="button" disabled={page === 1} onClick={() => setPage((value) => value - 1)} aria-label="Previous page">
               <ChevronLeft size={17} />
             </button>
@@ -406,7 +529,7 @@ export function EntityPage({ config }: EntityPageProps) {
             <footer className="modal-actions">
               <button className="button secondary" type="button" onClick={closeModal}>Cancel</button>
               <button className="button primary" type="submit" disabled={submitting}>
-                {submitting ? 'Saving…' : `Save ${config.singular.toLowerCase()}`}
+                {submitting ? 'Saving...' : `Save ${config.singular.toLowerCase()}`}
               </button>
             </footer>
           </form>

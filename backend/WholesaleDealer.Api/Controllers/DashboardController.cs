@@ -15,6 +15,11 @@ public sealed class DashboardController(WholesaleDealerDbContext db) : Controlle
         // A scoped DbContext is intentionally queried sequentially because it is not thread-safe.
         var totalOrders = await db.Orders.CountAsync(cancellationToken);
         var totalMerchants = await db.Merchants.CountAsync(cancellationToken);
+        var totalCustomers = await db.Users.CountAsync(cancellationToken);
+        var totalProducts = await db.Products.CountAsync(cancellationToken);
+        var totalCountries = await db.Countries.CountAsync(cancellationToken);
+        var pendingOrders = await db.Orders.CountAsync(x => x.Status == "Pending", cancellationToken);
+        var completedOrders = await db.Orders.CountAsync(x => x.Status == "Completed", cancellationToken);
         var activeProducts = await db.Products.CountAsync(x => x.Status == "Active", cancellationToken);
         var totalSales = await db.OrderItems
             .Where(x => x.Order.Status != "Cancelled")
@@ -37,12 +42,69 @@ public sealed class DashboardController(WholesaleDealerDbContext db) : Controlle
                 x.Name, x.Price, x.Status, x.CreatedAt))
             .ToListAsync(cancellationToken);
 
+        var productStatusCounts = await db.Products.AsNoTracking()
+            .GroupBy(x => x.Status)
+            .OrderBy(x => x.Key)
+            .Select(x => new ProductStatusCountResponse(x.Key, x.Count()))
+            .ToListAsync(cancellationToken);
+
+        var topCustomers = await db.Users.AsNoTracking()
+            .Select(x => new TopCustomerResponse(
+                x.Id,
+                x.FullName,
+                x.Orders.Count,
+                x.Orders
+                    .Where(order => order.Status != "Cancelled")
+                    .SelectMany(order => order.OrderItems)
+                    .Sum(item => (long?)item.Quantity * item.Product.Price) ?? 0))
+            .OrderByDescending(x => x.TotalSpent)
+            .ThenBy(x => x.FullName)
+            .Take(5)
+            .ToListAsync(cancellationToken);
+
+        var salesByCountry = await db.Countries.AsNoTracking()
+            .Select(x => new SalesByCountryResponse(
+                x.Name,
+                x.Users.SelectMany(user => user.Orders).Count(),
+                x.Users
+                    .SelectMany(user => user.Orders)
+                    .Where(order => order.Status != "Cancelled")
+                    .SelectMany(order => order.OrderItems)
+                    .Sum(item => (long?)item.Quantity * item.Product.Price) ?? 0))
+            .OrderByDescending(x => x.TotalSales)
+            .ThenBy(x => x.CountryName)
+            .Take(5)
+            .ToListAsync(cancellationToken);
+
+        var merchantSales = await db.Merchants.AsNoTracking()
+            .Select(x => new MerchantSalesResponse(
+                x.Id,
+                x.MerchantName,
+                x.Products.Count,
+                x.Products
+                    .SelectMany(product => product.OrderItems)
+                    .Where(item => item.Order.Status != "Cancelled")
+                    .Sum(item => (long?)item.Quantity * item.Product.Price) ?? 0))
+            .OrderByDescending(x => x.TotalSales)
+            .ThenBy(x => x.MerchantName)
+            .Take(5)
+            .ToListAsync(cancellationToken);
+
         return Ok(new DashboardSummaryResponse(
             totalOrders,
             totalSales,
             totalMerchants,
             activeProducts,
+            totalCustomers,
+            totalProducts,
+            totalCountries,
+            pendingOrders,
+            completedOrders,
             recentOrders,
-            productStatuses));
+            productStatuses,
+            productStatusCounts,
+            topCustomers,
+            salesByCountry,
+            merchantSales));
     }
 }

@@ -1,15 +1,25 @@
 # Wholesale Dealer Database System
 
-A complete Database Systems semester project based on the supplied ERD. It manages countries, users, merchants, products, orders, and order items through a MySQL 8 database, an ASP.NET Core 8 API, and a React/Vite administration dashboard.
+A complete Database Systems semester project based on the supplied ERD. It manages countries, users, merchants, products, orders, and order items through a MySQL 8 database, an ASP.NET Core 8 Web API, and a React/Vite administration dashboard.
 
 ## Technology
 
 - MySQL 8.0 / InnoDB / `utf8mb4`
 - ASP.NET Core 8 Web API
-- Entity Framework Core 8 with Pomelo
+- Entity Framework Core 8 with Pomelo MySQL Provider
 - Swagger / OpenAPI
 - React 19 + TypeScript + Vite
 - Axios, React Router, and Lucide icons
+
+## Professional features
+
+- Full CRUD for all ERD tables.
+- Dashboard KPIs for sales, customers, countries, products, merchants, pending orders, and fulfillment rate.
+- Business reports for top customers, sales by country, product status counts, and merchant sales.
+- Search, status filtering, sortable columns, pagination, page-size selection, and CSV export on CRUD tables.
+- Form validation, required dropdowns, disabled key fields during edits, loading states, empty states, and confirmation before delete.
+- Swagger documentation, CORS configuration, global error handling, DTO validation, and async EF Core queries.
+- Dockerized MySQL setup with schema and 20 sample records for every table.
 
 ## ERD implementation
 
@@ -44,6 +54,7 @@ Final Project/
 │       │   ├── OrderItemsController.cs
 │       │   ├── OrdersController.cs
 │       │   ├── ProductsController.cs
+│       │   ├── ReportsController.cs
 │       │   └── UsersController.cs
 │       ├── Data/WholesaleDealerDbContext.cs
 │       ├── Dtos/
@@ -178,6 +189,7 @@ dotnet run --project .\backend\WholesaleDealer.Api --launch-profile http
 | Resource | Endpoints |
 |---|---|
 | Dashboard | `GET /api/dashboard` |
+| Reports | `GET /api/reports/product-status`, `GET /api/reports/top-customers`, `GET /api/reports/sales-by-country`, `GET /api/reports/merchant-sales` |
 | Countries | `GET/POST /api/countries`, `GET/PUT/DELETE /api/countries/{code}` |
 | Users | `GET/POST /api/users`, `GET/PUT/DELETE /api/users/{id}` |
 | Merchants | `GET/POST /api/merchants`, `GET/PUT/DELETE /api/merchants/{id}` |

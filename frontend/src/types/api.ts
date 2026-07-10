@@ -62,8 +62,42 @@ export interface DashboardSummary {
   totalSales: number
   totalMerchants: number
   activeProducts: number
+  totalCustomers: number
+  totalProducts: number
+  totalCountries: number
+  pendingOrders: number
+  completedOrders: number
   recentOrders: Order[]
   productStatuses: Product[]
+  productStatusCounts: ProductStatusCount[]
+  topCustomers: TopCustomer[]
+  salesByCountry: SalesByCountry[]
+  merchantSales: MerchantSales[]
+}
+
+export interface ProductStatusCount {
+  status: string
+  count: number
+}
+
+export interface TopCustomer {
+  userId: number
+  fullName: string
+  orderCount: number
+  totalSpent: number
+}
+
+export interface SalesByCountry {
+  countryName: string
+  orderCount: number
+  totalSales: number
+}
+
+export interface MerchantSales {
+  merchantId: number
+  merchantName: string
+  productCount: number
+  totalSales: number
 }
 
 export interface SelectOption {

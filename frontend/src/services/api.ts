@@ -1,5 +1,12 @@
 import axios from 'axios'
-import type { ApiRecord, DashboardSummary } from '../types/api'
+import type {
+  ApiRecord,
+  DashboardSummary,
+  MerchantSales,
+  ProductStatusCount,
+  SalesByCountry,
+  TopCustomer,
+} from '../types/api'
 
 const api = axios.create({
   baseURL: import.meta.env.VITE_API_URL ?? '/api',
@@ -45,6 +52,26 @@ export const apiService = {
   getDashboard: async (): Promise<DashboardSummary> => {
     const response = await api.get<unknown>('/dashboard')
     return normalizeKeys(response.data) as DashboardSummary
+  },
+
+  getProductStatusReport: async (): Promise<ProductStatusCount[]> => {
+    const response = await api.get<unknown>('/reports/product-status')
+    return normalizeList<ProductStatusCount>(response.data)
+  },
+
+  getTopCustomersReport: async (limit = 10): Promise<TopCustomer[]> => {
+    const response = await api.get<unknown>('/reports/top-customers', { params: { limit } })
+    return normalizeList<TopCustomer>(response.data)
+  },
+
+  getSalesByCountryReport: async (limit = 10): Promise<SalesByCountry[]> => {
+    const response = await api.get<unknown>('/reports/sales-by-country', { params: { limit } })
+    return normalizeList<SalesByCountry>(response.data)
+  },
+
+  getMerchantSalesReport: async (limit = 10): Promise<MerchantSales[]> => {
+    const response = await api.get<unknown>('/reports/merchant-sales', { params: { limit } })
+    return normalizeList<MerchantSales>(response.data)
   },
 
   create: async <T = ApiRecord>(endpoint: string, payload: ApiRecord): Promise<T> => {
