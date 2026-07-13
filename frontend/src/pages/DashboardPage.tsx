@@ -11,15 +11,11 @@ import {
 } from 'lucide-react'
 import { useCallback, useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
+import { ProductStatusChart, SalesByCountryChart } from '../components/BusinessCharts'
 import { StatusBadge } from '../components/StatusBadge'
 import { apiService, getErrorMessage } from '../services/api'
-import type { DashboardSummary } from '../types/api'
-
-const money = new Intl.NumberFormat('en-US', {
-  style: 'currency',
-  currency: 'USD',
-  maximumFractionDigits: 0,
-})
+import type { BusinessKpis, DashboardSummary } from '../types/api'
+import { wholeMoney as money } from '../utils/format'
 
 function formatDate(value: string) {
   const [date] = value.split(' ')
@@ -28,6 +24,7 @@ function formatDate(value: string) {
 
 export function DashboardPage() {
   const [data, setData] = useState<DashboardSummary | null>(null)
+  const [kpis, setKpis] = useState<BusinessKpis | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
 
@@ -35,7 +32,12 @@ export function DashboardPage() {
     setLoading(true)
     setError('')
     try {
-      setData(await apiService.getDashboard())
+      const [dashboard, businessKpis] = await Promise.all([
+        apiService.getDashboard(),
+        apiService.getBusinessKpis(),
+      ])
+      setData(dashboard)
+      setKpis(businessKpis)
     } catch (requestError) {
       setError(getErrorMessage(requestError))
     } finally {
@@ -85,11 +87,11 @@ export function DashboardPage() {
     <div className="dashboard-page">
       <section className="metric-grid" aria-label="Business totals">
         {cards.map(({ label, value, icon: Icon }) => (
-          <article className="metric-card" key={label}>
+          <article className={`metric-card ${label === 'Total sales' ? 'metric-card-wide-value' : ''}`} key={label}>
             <span className="metric-icon"><Icon size={21} /></span>
             <div>
               <span>{label}</span>
-              <strong>{value}</strong>
+              <strong title={value}>{value}</strong>
             </div>
           </article>
         ))}
@@ -107,15 +109,39 @@ export function DashboardPage() {
         </article>
         <article>
           <span>Average order value</span>
-          <strong>{money.format(data.totalOrders === 0 ? 0 : Math.round(data.totalSales / data.totalOrders))}</strong>
+          <strong>{money.format(kpis?.averageOrderValue ?? 0)}</strong>
           <p>Calculated from non-cancelled order items</p>
         </article>
         <article>
           <span>Catalog health</span>
-          <strong>{data.productStatusCounts.map((item) => `${item.status}: ${item.count}`).join(' / ')}</strong>
-          <p>Status distribution from products table</p>
+          <strong>{data.activeProducts.toLocaleString()} active · {Math.max(0, data.totalProducts - data.activeProducts).toLocaleString()} unavailable</strong>
+          <p>{data.productStatusCounts.map((item) => `${item.status}: ${item.count}`).join(' / ') || 'No products recorded'}</p>
         </article>
       </section>
+
+      <div className="chart-dashboard-grid">
+        <section className="panel chart-panel" aria-labelledby="product-status-chart-title">
+          <header className="panel-header">
+            <div>
+              <h2 id="product-status-chart-title">Catalog availability</h2>
+              <p>Current distribution of product statuses</p>
+            </div>
+            <Link to="/products">Manage catalog</Link>
+          </header>
+          <ProductStatusChart data={data.productStatusCounts} />
+        </section>
+
+        <section className="panel chart-panel" aria-labelledby="country-sales-chart-title">
+          <header className="panel-header">
+            <div>
+              <h2 id="country-sales-chart-title">Revenue by country</h2>
+              <p>Top markets measured by order value</p>
+            </div>
+            <Link to="/analytics">Open analytics</Link>
+          </header>
+          <SalesByCountryChart data={data.salesByCountry} />
+        </section>
+      </div>
 
       <div className="simple-dashboard-grid">
         <section className="panel">
@@ -128,6 +154,7 @@ export function DashboardPage() {
           </header>
           <div className="table-scroll">
             <table>
+              <caption className="sr-only">Most recently created customer orders</caption>
               <thead>
                 <tr>
                   <th>Order</th>
@@ -162,6 +189,7 @@ export function DashboardPage() {
           </header>
           <div className="table-scroll">
             <table>
+              <caption className="sr-only">Recent products and their catalog statuses</caption>
               <thead>
                 <tr>
                   <th>Product</th>
@@ -196,6 +224,7 @@ export function DashboardPage() {
           </header>
           <div className="table-scroll">
             <table>
+              <caption className="sr-only">Customers ranked by total spending</caption>
               <thead>
                 <tr>
                   <th>Customer</th>
@@ -226,6 +255,7 @@ export function DashboardPage() {
           </header>
           <div className="table-scroll">
             <table>
+              <caption className="sr-only">Countries ranked by total sales</caption>
               <thead>
                 <tr>
                   <th>Country</th>
@@ -257,6 +287,7 @@ export function DashboardPage() {
         </header>
         <div className="table-scroll">
           <table>
+            <caption className="sr-only">Merchants ranked by total product sales</caption>
             <thead>
               <tr>
                 <th>Merchant</th>

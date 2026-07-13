@@ -46,6 +46,39 @@ public sealed class OrderItemsController(WholesaleDealerDbContext db) : Controll
         OrderItemRequest request,
         CancellationToken cancellationToken)
     {
+        var order = await db.Orders.AsNoTracking()
+            .Where(x => x.Id == request.OrderId)
+            .Select(x => new { x.Id, x.Status })
+            .SingleOrDefaultAsync(cancellationToken);
+        if (order is null)
+        {
+            ModelState.AddModelError(nameof(request.OrderId), "Order was not found.");
+        }
+        else if (IsTerminal(order.Status))
+        {
+            return OrderLocked(order.Id, order.Status);
+        }
+
+        var product = await db.Products.AsNoTracking()
+            .Where(x => x.Id == request.ProductId)
+            .Select(x => new { x.Id, x.Name, x.Status })
+            .SingleOrDefaultAsync(cancellationToken);
+        if (product is null)
+        {
+            ModelState.AddModelError(nameof(request.ProductId), "Product was not found.");
+        }
+        else if (product.Status != "Active")
+        {
+            ModelState.AddModelError(
+                nameof(request.ProductId),
+                $"Only active products can be ordered. {product.Name} is {product.Status}.");
+        }
+
+        if (!ModelState.IsValid)
+        {
+            return ValidationProblem(ModelState);
+        }
+
         var item = new OrderItem
         {
             OrderId = request.OrderId,
@@ -75,8 +108,16 @@ public sealed class OrderItemsController(WholesaleDealerDbContext db) : Controll
             return ValidationProblem(ModelState);
         }
 
-        var item = await db.OrderItems.FindAsync([orderId, productId], cancellationToken);
+        var item = await db.OrderItems
+            .Include(x => x.Order)
+            .SingleOrDefaultAsync(
+                x => x.OrderId == orderId && x.ProductId == productId,
+                cancellationToken);
         if (item is null) return NotFound();
+        if (IsTerminal(item.Order.Status))
+        {
+            return OrderLocked(item.OrderId, item.Order.Status);
+        }
 
         item.Quantity = request.Quantity;
         await db.SaveChangesAsync(cancellationToken);
@@ -89,8 +130,16 @@ public sealed class OrderItemsController(WholesaleDealerDbContext db) : Controll
         int productId,
         CancellationToken cancellationToken)
     {
-        var item = await db.OrderItems.FindAsync([orderId, productId], cancellationToken);
+        var item = await db.OrderItems
+            .Include(x => x.Order)
+            .SingleOrDefaultAsync(
+                x => x.OrderId == orderId && x.ProductId == productId,
+                cancellationToken);
         if (item is null) return NotFound();
+        if (IsTerminal(item.Order.Status))
+        {
+            return OrderLocked(item.OrderId, item.Order.Status);
+        }
 
         db.OrderItems.Remove(item);
         await db.SaveChangesAsync(cancellationToken);
@@ -110,4 +159,15 @@ public sealed class OrderItemsController(WholesaleDealerDbContext db) : Controll
         x => new OrderItemResponse(
             x.OrderId, x.Order.User.FullName, x.ProductId, x.Product.Name,
             x.Quantity, x.Product.Price, (long)x.Quantity * x.Product.Price);
+
+    private static bool IsTerminal(string status) =>
+        status is "Completed" or "Cancelled";
+
+    private ObjectResult OrderLocked(int orderId, string status) =>
+        Conflict(new ProblemDetails
+        {
+            Status = StatusCodes.Status409Conflict,
+            Title = "Order is locked",
+            Detail = $"Order {orderId} is {status} and its items can no longer be changed."
+        });
 }

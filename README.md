@@ -9,17 +9,20 @@ A complete Database Systems semester project based on the supplied ERD. It manag
 - Entity Framework Core 8 with Pomelo MySQL Provider
 - Swagger / OpenAPI
 - React 19 + TypeScript + Vite
-- Axios, React Router, and Lucide icons
+- Axios, React Router, Recharts, and Lucide icons
 
 ## Professional features
 
-- Full CRUD for all ERD tables.
-- Dashboard KPIs for sales, customers, countries, products, merchants, pending orders, and fulfillment rate.
-- Business reports for top customers, sales by country, product status counts, and merchant sales.
-- Search, status filtering, sortable columns, pagination, page-size selection, and CSV export on CRUD tables.
-- Form validation, required dropdowns, disabled key fields during edits, loading states, empty states, and confirmation before delete.
-- Swagger documentation, CORS configuration, global error handling, DTO validation, and async EF Core queries.
-- Dockerized MySQL setup with schema and 20 sample records for every table.
+- Full CRUD for all six ERD tables with search, filters, sorting, pagination, configurable page size, and spreadsheet-safe CSV export.
+- Executive dashboard and analytics workspace with sales trends, fulfillment distribution, product performance, merchant performance, business KPIs, and accessible chart data tables.
+- Transactional Sales Order Builder for one customer and multiple unique product lines, including live quantities, line totals, subtotal, server-side price verification, and atomic database persistence.
+- Quote Calculator with database-backed product pricing, discount, tax, shipping, subtotal, and grand-total calculations. Results can be printed without modifying the database.
+- Business rules that reject unavailable products, duplicate order lines, invalid status transitions, and changes to completed or cancelled order items.
+- Form validation, dependent dropdown filtering, modal focus management, keyboard escape/focus trapping, loading states, empty states, retry actions, and delete confirmation.
+- Lazy-loaded React routes, responsive layouts, reduced-motion support, configurable display currency, and semantic SVG icons.
+- Swagger documentation, configurable CORS, RFC 7807 error responses, DTO validation, async EF Core queries, retry-safe transactions, and database-aware health checks.
+- Dockerized MySQL setup with the exact supplied ERD and 20 sample records for every table.
+- Repeatable PowerShell smoke tests covering all resources, analytics, quote arithmetic, validation, transactional creation, and cleanup.
 
 ## ERD implementation
 
@@ -48,6 +51,7 @@ Final Project/
 ├── backend/
 │   └── WholesaleDealer.Api/
 │       ├── Controllers/
+│       │   ├── CalculationsController.cs
 │       │   ├── CountriesController.cs
 │       │   ├── DashboardController.cs
 │       │   ├── MerchantsController.cs
@@ -58,6 +62,7 @@ Final Project/
 │       │   └── UsersController.cs
 │       ├── Data/WholesaleDealerDbContext.cs
 │       ├── Dtos/
+│       │   ├── AnalyticsDtos.cs
 │       │   ├── CountryDtos.cs
 │       │   ├── DashboardDtos.cs
 │       │   ├── MerchantDtos.cs
@@ -85,15 +90,20 @@ Final Project/
 │   ├── src/
 │   │   ├── components/
 │   │   │   ├── AppShell.tsx
+│   │   │   ├── BusinessCharts.tsx
 │   │   │   ├── Modal.tsx
 │   │   │   └── StatusBadge.tsx
 │   │   ├── config/entityConfigs.ts
 │   │   ├── pages/
+│   │   │   ├── AnalyticsPage.tsx
 │   │   │   ├── DashboardPage.tsx
 │   │   │   ├── EntityPage.tsx
-│   │   │   └── NotFoundPage.tsx
+│   │   │   ├── NotFoundPage.tsx
+│   │   │   ├── OrderBuilderPage.tsx
+│   │   │   └── QuoteCalculatorPage.tsx
 │   │   ├── services/api.ts
 │   │   ├── types/api.ts
+│   │   ├── utils/format.ts
 │   │   ├── App.tsx
 │   │   ├── index.css
 │   │   └── main.tsx
@@ -107,6 +117,8 @@ Final Project/
 │   └── vite.config.ts
 ├── docs/
 │   └── erd.png
+├── scripts/
+│   └── smoke-test.ps1
 ├── .gitignore
 ├── docker-compose.yml
 ├── WholesaleDealer.sln
@@ -189,15 +201,18 @@ dotnet run --project .\backend\WholesaleDealer.Api --launch-profile http
 | Resource | Endpoints |
 |---|---|
 | Dashboard | `GET /api/dashboard` |
-| Reports | `GET /api/reports/product-status`, `GET /api/reports/top-customers`, `GET /api/reports/sales-by-country`, `GET /api/reports/merchant-sales` |
+| Analytics | `GET /api/reports/business-kpis`, `GET /api/reports/sales-trend?days=90`, `GET /api/reports/order-status`, `GET /api/reports/top-products`, `GET /api/reports/top-merchants` |
+| Supporting reports | `GET /api/reports/product-status`, `GET /api/reports/top-customers`, `GET /api/reports/sales-by-country`, `GET /api/reports/merchant-sales` |
+| Calculations | `POST /api/calculations/order-total` |
 | Countries | `GET/POST /api/countries`, `GET/PUT/DELETE /api/countries/{code}` |
 | Users | `GET/POST /api/users`, `GET/PUT/DELETE /api/users/{id}` |
 | Merchants | `GET/POST /api/merchants`, `GET/PUT/DELETE /api/merchants/{id}` |
 | Products | `GET/POST /api/products`, `GET/PUT/DELETE /api/products/{id}` |
-| Orders | `GET/POST /api/orders`, `GET/PUT/DELETE /api/orders/{id}` |
+| Orders | `GET/POST /api/orders`, `POST /api/orders/with-items`, `GET/PUT/DELETE /api/orders/{id}` |
 | Order items | `GET/POST /api/order-items`, `GET/PUT/DELETE /api/order-items/{orderId}/{productId}` |
+| Health | `GET /api/health` |
 
-All controllers use asynchronous EF Core queries, DTO validation, no-tracking reads, proper `201`, `204`, `400`, `404`, and `409` responses, and global RFC 7807-style error output.
+All controllers use asynchronous EF Core queries, DTO validation, no-tracking reads, proper `201`, `204`, `400`, `404`, and `409` responses, and global RFC 7807-style error output. Use `POST /api/orders/with-items` for normal sales entry because it validates and persists the order header and product lines together.
 
 ## Development checks
 
@@ -212,10 +227,36 @@ npm run lint
 
 Build output is written to `backend/**/bin` and `frontend/dist`.
 
+With MySQL and the API running, execute the end-to-end API smoke suite from the project root:
+
+```powershell
+.\scripts\smoke-test.ps1
+```
+
+The script validates all six resources, dashboard/report contracts, calculator arithmetic, unavailable-product rejection, transactional order persistence, and guaranteed cleanup of its temporary order. Use `-BaseUrl` when the API runs on another address.
+
+## Frontend environment
+
+Copy `frontend/.env.example` to `frontend/.env` only when local overrides are needed:
+
+```text
+VITE_API_URL=/api
+VITE_CURRENCY=USD
+```
+
+`VITE_CURRENCY` accepts an ISO 4217 currency code such as `USD`, `PKR`, `AED`, or `GBP`. It changes presentation only; the supplied ERD does not contain a currency column.
+
+## ERD-preserving limitations
+
+The application deliberately keeps the attached ERD unchanged. Because `order_items` contains only `order_id`, `product_id`, and `quantity`, historical order totals use each product's current catalog price. Discount, tax, and shipping values in the Quote Calculator are calculated for the current quote but are not persisted.
+
+Before commercial use, a real deployment should extend the data model with price snapshots, invoices/quote records, currency, inventory movements, authentication and roles, an audit log, optimistic concurrency, and organization-specific authorization. Those changes are intentionally outside this ERD-exact semester project.
+
 ## Production configuration
 
 - Store `ConnectionStrings__WholesaleDealer` in environment variables or a secret manager.
 - Set `VITE_API_URL` to the deployed API base URL before `npm run build`.
+- Set `VITE_CURRENCY` before `npm run build` when the display currency is not USD.
 - Add the deployed frontend origin to `Cors:AllowedOrigins`.
 - Serve `frontend/dist` through a static web server or CDN.
 - Terminate HTTPS at the ASP.NET host or a trusted reverse proxy.

@@ -70,8 +70,17 @@ function compareValues(a: Primitive | undefined, b: Primitive | undefined, direc
 }
 
 function csvEscape(value: Primitive | undefined) {
-  const text = displayValue(value)
+  let text = displayValue(value)
+  if (typeof value === 'string' && /^[=+\-@]/.test(value)) text = `'${text}`
   return /[",\n]/.test(text) ? `"${text.replaceAll('"', '""')}"` : text
+}
+
+const orderTransitions: Record<string, string[]> = {
+  Pending: ['Pending', 'Processing', 'Cancelled'],
+  Processing: ['Processing', 'Shipped', 'Cancelled'],
+  Shipped: ['Shipped', 'Completed', 'Cancelled'],
+  Completed: ['Completed'],
+  Cancelled: ['Cancelled'],
 }
 
 export function EntityPage({ config }: EntityPageProps) {
@@ -128,7 +137,14 @@ export function EntityPage({ config }: EntityPageProps) {
           referenceFields.map(async (field) => {
             const source = field.reference!
             const records = await apiService.getAll(source.endpoint)
-            const options = records.map((record) => ({
+            const filteredRecords = source.filter
+              ? records.filter((record) => {
+                  const value = readValue(record, source.filter!.key)
+                  if (source.filter!.equals !== undefined && value !== source.filter!.equals) return false
+                  return !source.filter!.excludes?.includes(value ?? '')
+                })
+              : records
+            const options = filteredRecords.map((record) => ({
               value: record[source.valueKey],
               label: source.prefix
                 ? `${source.prefix}${record[source.valueKey]} - ${record[source.labelKey]}`
@@ -217,7 +233,18 @@ export function EntityPage({ config }: EntityPageProps) {
   }
 
   function optionsFor(field: FormField): SelectOption[] {
-    return field.options ?? referenceOptions[field.key] ?? []
+    const options = field.options ?? referenceOptions[field.key] ?? []
+    if (config.path !== 'orders' || field.key !== 'status' || modalMode !== 'edit' || !editingRow) {
+      return options
+    }
+    const allowed = orderTransitions[String(readValue(editingRow, 'status'))] ?? []
+    return options.filter((option) => allowed.includes(String(option.value)))
+  }
+
+  function isTerminalOrder(row: ApiRecord) {
+    if (config.path !== 'orders') return false
+    const status = String(readValue(row, 'status'))
+    return status === 'Completed' || status === 'Cancelled'
   }
 
   function toggleSort(key: string) {
@@ -330,9 +357,13 @@ export function EntityPage({ config }: EntityPageProps) {
           <h2>{config.plural}</h2>
           <p>{config.description}</p>
         </div>
-        <button className="button primary" type="button" onClick={openCreate}>
+        <button
+          className="button primary"
+          type="button"
+          onClick={() => config.createPath ? navigate(config.createPath) : openCreate()}
+        >
           <Plus size={17} />
-          Add {config.singular.toLowerCase()}
+          {config.createLabel ?? `Add ${config.singular.toLowerCase()}`}
         </button>
       </div>
 
@@ -342,12 +373,18 @@ export function EntityPage({ config }: EntityPageProps) {
           <button type="button" onClick={() => setNotice('')}>Dismiss</button>
         </div>
       ) : null}
-      {loadError ? <div className="alert error" role="alert">{loadError}</div> : null}
+      {loadError ? (
+        <div className="alert error" role="alert">
+          <span>{loadError}</span>
+          <button type="button" onClick={() => void loadRows()}>Try again</button>
+        </div>
+      ) : null}
 
       <div className="data-panel">
         <div className="table-toolbar">
           <div className="toolbar-left">
             <label className="search-field">
+              <span className="sr-only">Search {config.plural.toLowerCase()}</span>
               <Search size={17} />
               <input
                 type="search"
@@ -358,6 +395,7 @@ export function EntityPage({ config }: EntityPageProps) {
             </label>
             {statusOptions.length > 0 ? (
               <label className="compact-select">
+                <span className="sr-only">Filter by status</span>
                 <Filter size={15} />
                 <select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)}>
                   <option value="">All statuses</option>
@@ -372,7 +410,7 @@ export function EntityPage({ config }: EntityPageProps) {
           </div>
           <div className="toolbar-actions">
             <span>{sortedRows.length} {sortedRows.length === 1 ? 'record' : 'records'}</span>
-            <button className="button secondary compact-button" type="button" onClick={() => void loadRows()}>
+            <button className="button secondary compact-button" type="button" onClick={() => void loadRows()} disabled={loading}>
               <RefreshCcw size={15} />
               Refresh
             </button>
@@ -385,11 +423,22 @@ export function EntityPage({ config }: EntityPageProps) {
 
         <div className="table-scroll">
           <table className="entity-table">
+            <caption className="sr-only">{config.description}</caption>
             <thead>
               <tr>
                 {config.columns.map((column) => (
-                  <th key={column.key}>
-                    <button className="sort-button" type="button" onClick={() => toggleSort(column.key)}>
+                  <th
+                    key={column.key}
+                    aria-sort={sortState?.key === column.key
+                      ? sortState.direction === 'asc' ? 'ascending' : 'descending'
+                      : 'none'}
+                  >
+                    <button
+                      className="sort-button"
+                      type="button"
+                      onClick={() => toggleSort(column.key)}
+                      aria-label={`Sort by ${column.label}`}
+                    >
                       <span>{column.label}</span>
                       <ArrowUpDown size={13} />
                       {sortState?.key === column.key ? (
@@ -413,7 +462,20 @@ export function EntityPage({ config }: EntityPageProps) {
               ) : visibleRows.length === 0 ? (
                 <tr>
                   <td className="empty-table" colSpan={config.columns.length + 1}>
-                    No {config.plural.toLowerCase()} found.
+                    <strong>No {config.plural.toLowerCase()} found</strong>
+                    <span>{search || statusFilter ? 'Try clearing the current filters.' : `Add the first ${config.singular.toLowerCase()} to get started.`}</span>
+                    {search || statusFilter ? (
+                      <button
+                        className="button secondary compact-button"
+                        type="button"
+                        onClick={() => {
+                          setSearch('')
+                          setStatusFilter('')
+                        }}
+                      >
+                        Clear filters
+                      </button>
+                    ) : null}
                   </td>
                 </tr>
               ) : (
@@ -435,7 +497,14 @@ export function EntityPage({ config }: EntityPageProps) {
                     })}
                     <td>
                       <div className="row-actions">
-                        <button className="icon-button" type="button" onClick={() => openEdit(row)} aria-label={`Edit ${config.singular}`}>
+                        <button
+                          className="icon-button"
+                          type="button"
+                          onClick={() => openEdit(row)}
+                          disabled={isTerminalOrder(row)}
+                          title={isTerminalOrder(row) ? `${String(readValue(row, 'status'))} orders are locked` : undefined}
+                          aria-label={isTerminalOrder(row) ? `${String(readValue(row, 'status'))} order is locked` : `Edit ${config.singular}`}
+                        >
                           <Pencil size={16} />
                         </button>
                         <button className="icon-button danger" type="button" onClick={() => void deleteRow(row)} aria-label={`Delete ${config.singular}`}>
@@ -478,11 +547,13 @@ export function EntityPage({ config }: EntityPageProps) {
       {modalMode ? (
         <Modal title={`${modalMode === 'edit' ? 'Edit' : 'Add'} ${config.singular.toLowerCase()}`} onClose={closeModal}>
           <form className="entity-form" onSubmit={(event) => void submitForm(event)} noValidate>
-            {formErrors.form ? <div className="alert error">{formErrors.form}</div> : null}
+            {formErrors.form ? <div className="alert error" role="alert">{formErrors.form}</div> : null}
             <div className="form-grid">
               {config.fields.map((field) => {
                 const fieldOptions = optionsFor(field)
-                const disabled = modalMode === 'edit' && config.keyFields.includes(field.key)
+                const disabled = modalMode === 'edit' && (
+                  config.keyFields.includes(field.key) || config.immutableOnEditFields?.includes(field.key)
+                )
                 return (
                   <label className="form-field" key={field.key}>
                     <span>{field.label}{field.required ? ' *' : ''}</span>

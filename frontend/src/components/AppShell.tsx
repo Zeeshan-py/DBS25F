@@ -1,10 +1,13 @@
 import {
   Building2,
+  Calculator,
+  ChartNoAxesCombined,
   ClipboardList,
   Globe2,
   LayoutDashboard,
   Menu,
   Package,
+  PackagePlus,
   Plus,
   ShoppingBag,
   Users,
@@ -16,6 +19,9 @@ import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom'
 
 const navigation = [
   { label: 'Dashboard', path: '/', icon: LayoutDashboard },
+  { label: 'Analytics', path: '/analytics', icon: ChartNoAxesCombined },
+  { label: 'New Sales Order', path: '/order-builder', icon: PackagePlus },
+  { label: 'Quote Calculator', path: '/quote-calculator', icon: Calculator },
   { label: 'Countries', path: '/countries', icon: Globe2 },
   { label: 'Users', path: '/users', icon: Users },
   { label: 'Merchants', path: '/merchants', icon: Building2 },
@@ -34,6 +40,7 @@ export function AppShell() {
 
   return (
     <div className="app-shell">
+      <a className="skip-link" href="#main-content">Skip to main content</a>
       <aside className={`sidebar ${sidebarOpen ? 'sidebar-open' : ''}`}>
         <div className="brand">
           <span className="brand-mark"><Warehouse size={24} /></span>
@@ -87,6 +94,7 @@ export function AppShell() {
               type="button"
               onClick={() => setSidebarOpen(true)}
               aria-label="Open navigation"
+              aria-expanded={sidebarOpen}
             >
               <Menu size={21} />
             </button>
@@ -99,14 +107,14 @@ export function AppShell() {
             <button
               className="button primary topbar-create"
               type="button"
-              onClick={() => navigate('/orders', { state: { openCreate: Date.now() } })}
+              onClick={() => navigate('/order-builder')}
             >
               <Plus size={17} />
               New order
             </button>
           </div>
         </header>
-        <main className="content">
+        <main className="content" id="main-content" tabIndex={-1}>
           <Outlet />
         </main>
       </div>

@@ -10,6 +10,61 @@ Accept: application/json
 
 ###
 
+GET {{host}}/api/reports/business-kpis
+Accept: application/json
+
+###
+
+GET {{host}}/api/reports/sales-trend?days=90
+Accept: application/json
+
+###
+
+GET {{host}}/api/reports/order-status
+Accept: application/json
+
+###
+
+GET {{host}}/api/reports/top-products?limit=5
+Accept: application/json
+
+###
+
+GET {{host}}/api/reports/top-merchants?limit=5
+Accept: application/json
+
+###
+
+POST {{host}}/api/calculations/order-total
+Content-Type: application/json
+
+{
+  "items": [
+    { "productId": 1, "quantity": 10 },
+    { "productId": 2, "quantity": 5 }
+  ],
+  "discountPercentage": 5,
+  "taxPercentage": 8,
+  "shippingAmount": 1500
+}
+
+###
+
+# This request creates an order header and all lines in one transaction.
+POST {{host}}/api/orders/with-items
+Content-Type: application/json
+
+{
+  "userId": 1,
+  "status": "Pending",
+  "items": [
+    { "productId": 1, "quantity": 10 },
+    { "productId": 2, "quantity": 5 }
+  ]
+}
+
+###
+
 GET {{host}}/api/products
 Accept: application/json
 

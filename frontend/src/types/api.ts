@@ -100,6 +100,106 @@ export interface MerchantSales {
   totalSales: number
 }
 
+export interface CreateOrderLineRequest {
+  productId: number
+  quantity: number
+}
+
+export interface CreateOrderWithItemsRequest {
+  userId: number
+  status: string
+  items: CreateOrderLineRequest[]
+}
+
+export interface CreatedOrderLine {
+  productId: number
+  productName: string
+  merchantName: string
+  quantity: number
+  unitPrice: number
+  lineTotal: number
+}
+
+export interface CreatedOrder {
+  id: number
+  userId: number
+  userName: string
+  status: string
+  createdAt: string
+  totalQuantity: number
+  subtotal: number
+  items: CreatedOrderLine[]
+}
+
+export interface BusinessKpis {
+  totalOrders: number
+  openOrders: number
+  completedOrders: number
+  cancelledOrders: number
+  totalSales: number
+  completedSales: number
+  unitsSold: number
+  averageOrderValue: number
+  averageUnitsPerOrder: number
+  completionRate: number
+  cancellationRate: number
+}
+
+export interface SalesTrendPoint {
+  date: string
+  orderCount: number
+  unitsSold: number
+  totalSales: number
+}
+
+export interface OrderStatusMetric {
+  status: string
+  orderCount: number
+  percentage: number
+  unitsSold: number
+  totalSales: number
+}
+
+export interface TopProductMetric {
+  productId: number
+  productName: string
+  merchantName: string
+  orderCount: number
+  unitsSold: number
+  totalSales: number
+}
+
+export interface TopMerchantMetric {
+  merchantId: number
+  merchantName: string
+  catalogProductCount: number
+  orderCount: number
+  unitsSold: number
+  totalSales: number
+}
+
+export interface CalculateOrderTotalRequest {
+  items: CreateOrderLineRequest[]
+  discountPercentage: number
+  taxPercentage: number
+  shippingAmount: number
+}
+
+export type OrderCalculationLine = CreatedOrderLine
+
+export interface OrderCalculationResult {
+  totalQuantity: number
+  subtotal: number
+  discountPercentage: number
+  discountAmount: number
+  taxableAmount: number
+  taxPercentage: number
+  taxAmount: number
+  shippingAmount: number
+  grandTotal: number
+  items: OrderCalculationLine[]
+}
+
 export interface SelectOption {
   value: Primitive
   label: string
@@ -110,6 +210,11 @@ export interface ReferenceSource {
   valueKey: string
   labelKey: string
   prefix?: string
+  filter?: {
+    key: string
+    equals?: Primitive
+    excludes?: Primitive[]
+  }
 }
 
 export interface FormField {
@@ -136,6 +241,9 @@ export interface EntityConfig {
   singular: string
   plural: string
   description: string
+  createPath?: string
+  createLabel?: string
+  immutableOnEditFields?: string[]
   keyFields: string[]
   columns: TableColumn[]
   fields: FormField[]

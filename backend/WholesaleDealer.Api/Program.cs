@@ -33,7 +33,7 @@ builder.Services.AddSwaggerGen(options =>
     {
         Title = "Wholesale Dealer API",
         Version = "v1",
-        Description = "CRUD API for the wholesale dealer database semester project."
+        Description = "Wholesale operations API for catalog management, transactional orders, reporting, analytics, and server-validated calculations."
     });
 });
 
@@ -53,11 +53,25 @@ else
 
 app.UseCors("Frontend");
 app.MapControllers();
-app.MapGet("/api/health", () => Results.Ok(new
+app.MapGet("/api/health", async (
+    WholesaleDealerDbContext db,
+    CancellationToken cancellationToken) =>
 {
-    status = "Healthy",
-    utcTime = DateTime.UtcNow
-})).WithTags("Health");
+    var databaseReady = await db.Database.CanConnectAsync(cancellationToken);
+    var response = new
+    {
+        status = databaseReady ? "Healthy" : "Degraded",
+        database = databaseReady ? "Connected" : "Unavailable",
+        utcTime = DateTime.UtcNow
+    };
+
+    return databaseReady
+        ? Results.Ok(response)
+        : Results.Json(response, statusCode: StatusCodes.Status503ServiceUnavailable);
+})
+    .WithTags("Health")
+    .Produces(StatusCodes.Status200OK)
+    .Produces(StatusCodes.Status503ServiceUnavailable);
 
 app.Run();
 

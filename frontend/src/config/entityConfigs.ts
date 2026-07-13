@@ -1,10 +1,5 @@
 import type { EntityConfig } from '../types/api'
-
-const money = new Intl.NumberFormat('en-US', {
-  style: 'currency',
-  currency: 'USD',
-  maximumFractionDigits: 0,
-})
+import { wholeMoney as money } from '../utils/format'
 
 const orderStatuses = ['Pending', 'Processing', 'Shipped', 'Completed', 'Cancelled'].map(
   (status) => ({ value: status, label: status }),
@@ -137,6 +132,9 @@ export const entityConfigs: EntityConfig[] = [
     singular: 'Order',
     plural: 'Orders',
     description: 'Create orders and track their fulfillment status.',
+    createPath: '/order-builder',
+    createLabel: 'Create sales order',
+    immutableOnEditFields: ['userId'],
     keyFields: ['id'],
     columns: [
       { key: 'id', label: 'Order #' },
@@ -178,14 +176,26 @@ export const entityConfigs: EntityConfig[] = [
         label: 'Order',
         type: 'select',
         required: true,
-        reference: { endpoint: '/orders', valueKey: 'id', labelKey: 'userName', prefix: 'Order #' },
+        reference: {
+          endpoint: '/orders',
+          valueKey: 'id',
+          labelKey: 'userName',
+          prefix: 'Order #',
+          filter: { key: 'status', excludes: ['Completed', 'Cancelled'] },
+        },
       },
       {
         key: 'productId',
         label: 'Product',
         type: 'select',
         required: true,
-        reference: { endpoint: '/products', valueKey: 'id', labelKey: 'name', prefix: '#' },
+        reference: {
+          endpoint: '/products',
+          valueKey: 'id',
+          labelKey: 'name',
+          prefix: '#',
+          filter: { key: 'status', equals: 'Active' },
+        },
       },
       { key: 'quantity', label: 'Bulk quantity', type: 'number', min: 1, max: 100000, required: true },
     ],

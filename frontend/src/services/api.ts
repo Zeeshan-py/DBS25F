@@ -1,11 +1,20 @@
 import axios from 'axios'
 import type {
   ApiRecord,
+  BusinessKpis,
+  CalculateOrderTotalRequest,
+  CreatedOrder,
+  CreateOrderWithItemsRequest,
   DashboardSummary,
   MerchantSales,
+  OrderCalculationResult,
+  OrderStatusMetric,
   ProductStatusCount,
   SalesByCountry,
+  SalesTrendPoint,
   TopCustomer,
+  TopMerchantMetric,
+  TopProductMetric,
 } from '../types/api'
 
 const api = axios.create({
@@ -43,6 +52,12 @@ function normalizeList<T>(value: unknown): T[] {
   throw new Error('The API returned an invalid list response.')
 }
 
+function embeddedList<T>(value: unknown): T[] {
+  if (Array.isArray(value)) return value as T[]
+  const wrapped = value as { $values?: unknown } | null
+  return wrapped && Array.isArray(wrapped.$values) ? wrapped.$values as T[] : []
+}
+
 export const apiService = {
   getAll: async <T = ApiRecord>(endpoint: string): Promise<T[]> => {
     const response = await api.get<unknown>(endpoint)
@@ -51,7 +66,24 @@ export const apiService = {
 
   getDashboard: async (): Promise<DashboardSummary> => {
     const response = await api.get<unknown>('/dashboard')
-    return normalizeKeys(response.data) as DashboardSummary
+    const value = normalizeKeys(response.data) as Partial<DashboardSummary>
+    return {
+      totalOrders: Number(value.totalOrders ?? 0),
+      totalSales: Number(value.totalSales ?? 0),
+      totalMerchants: Number(value.totalMerchants ?? 0),
+      activeProducts: Number(value.activeProducts ?? 0),
+      totalCustomers: Number(value.totalCustomers ?? 0),
+      totalProducts: Number(value.totalProducts ?? 0),
+      totalCountries: Number(value.totalCountries ?? 0),
+      pendingOrders: Number(value.pendingOrders ?? 0),
+      completedOrders: Number(value.completedOrders ?? 0),
+      recentOrders: embeddedList(value.recentOrders),
+      productStatuses: embeddedList(value.productStatuses),
+      productStatusCounts: embeddedList(value.productStatusCounts),
+      topCustomers: embeddedList(value.topCustomers),
+      salesByCountry: embeddedList(value.salesByCountry),
+      merchantSales: embeddedList(value.merchantSales),
+    }
   },
 
   getProductStatusReport: async (): Promise<ProductStatusCount[]> => {
@@ -72,6 +104,41 @@ export const apiService = {
   getMerchantSalesReport: async (limit = 10): Promise<MerchantSales[]> => {
     const response = await api.get<unknown>('/reports/merchant-sales', { params: { limit } })
     return normalizeList<MerchantSales>(response.data)
+  },
+
+  createOrderWithItems: async (payload: CreateOrderWithItemsRequest): Promise<CreatedOrder> => {
+    const response = await api.post<unknown>('/orders/with-items', payload)
+    return normalizeKeys(response.data) as CreatedOrder
+  },
+
+  getBusinessKpis: async (): Promise<BusinessKpis> => {
+    const response = await api.get<unknown>('/reports/business-kpis')
+    return normalizeKeys(response.data) as BusinessKpis
+  },
+
+  getSalesTrend: async (days = 90): Promise<SalesTrendPoint[]> => {
+    const response = await api.get<unknown>('/reports/sales-trend', { params: { days } })
+    return normalizeList<SalesTrendPoint>(response.data)
+  },
+
+  getOrderStatusReport: async (): Promise<OrderStatusMetric[]> => {
+    const response = await api.get<unknown>('/reports/order-status')
+    return normalizeList<OrderStatusMetric>(response.data)
+  },
+
+  getTopProductsReport: async (limit = 10): Promise<TopProductMetric[]> => {
+    const response = await api.get<unknown>('/reports/top-products', { params: { limit } })
+    return normalizeList<TopProductMetric>(response.data)
+  },
+
+  getTopMerchantsReport: async (limit = 10): Promise<TopMerchantMetric[]> => {
+    const response = await api.get<unknown>('/reports/top-merchants', { params: { limit } })
+    return normalizeList<TopMerchantMetric>(response.data)
+  },
+
+  calculateOrderTotal: async (payload: CalculateOrderTotalRequest): Promise<OrderCalculationResult> => {
+    const response = await api.post<unknown>('/calculations/order-total', payload)
+    return normalizeKeys(response.data) as OrderCalculationResult
   },
 
   create: async <T = ApiRecord>(endpoint: string, payload: ApiRecord): Promise<T> => {
